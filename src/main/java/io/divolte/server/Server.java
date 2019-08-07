@@ -138,11 +138,13 @@ public final class Server implements Runnable {
                 );
 
         shutdownHandler = rootHandler;
+        HttpHandler handler = MetricsHandler.create(
+            vc.configuration().global.server.debugRequests
+                ? new RequestDumpingHandler(rootHandler)
+                : rootHandler);
         undertow = Undertow.builder()
                            .addHttpListener(port, host.orElse(null))
-                           .setHandler(vc.configuration().global.server.debugRequests
-                               ? new RequestDumpingHandler(rootHandler)
-                               : rootHandler)
+                           .setHandler(handler)
                            .build();
     }
 
