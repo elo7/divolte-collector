@@ -1,41 +1,26 @@
 package io.divolte.server;
 
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.SharedMetricRegistries;
-import com.codahale.metrics.Timer;
-import com.codahale.metrics.jmx.JmxReporter;
+import com.timgroup.statsd.NoOpStatsDClient;
+import com.timgroup.statsd.NonBlockingStatsDClient;
+import com.timgroup.statsd.StatsDClient;
+import io.divolte.server.config.StatsdConfiguration;
 import io.undertow.server.ExchangeCompletionListener;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 
 import javax.annotation.ParametersAreNonnullByDefault;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
-
-import static com.codahale.metrics.MetricRegistry.name;
 
 @ParametersAreNonnullByDefault
 public class MetricsHandler implements HttpHandler {
 
     private static final Pattern IGNORE_PATHS = Pattern.compile("^/(ping|static|.*\\.js|.*\\.css).*");
-    private final Timer timer2xx;
-    private final Timer timer3xx;
-    private final Timer timer4xx;
-    private final Timer timer5xx;
+    private final StatsDClient statsd;
     private final HttpHandler next;
 
-    MetricsHandler(HttpHandler next, MetricRegistry registry) {
-        timer2xx = registry.timer(name(this.getClass(), "requests.2xx"));
-        timer3xx = registry.timer(name(this.getClass(), "requests.3xx"));
-        timer4xx = registry.timer(name(this.getClass(), "requests.4xx"));
-        timer5xx = registry.timer(name(this.getClass(), "requests.5xx"));
+    MetricsHandler(HttpHandler next, StatsDClient statsd) {
         this.next = next;
-
-        JmxReporter
-            .forRegistry(registry)
-            .inDomain("io.divolte.server")
-            .build()
-            .start();
+        this.statsd = statsd;
     }
 
     @Override
@@ -54,27 +39,42 @@ public class MetricsHandler implements HttpHandler {
     void exchangeEvent(HttpServerExchange innerExchange, ExchangeCompletionListener.NextListener
         nextListener, long start) {
         long time = System.currentTimeMillis() - start;
+        String handler;
 
         switch (innerExchange.getStatusCode() / 100) {
             case 2:
-                timer2xx.update(time, TimeUnit.MILLISECONDS);
+                handler = "2xx";
                 break;
             case 3:
-                timer3xx.update(time, TimeUnit.MILLISECONDS);
+                handler = "3xx";
                 break;
             case 4:
-                timer4xx.update(time, TimeUnit.MILLISECONDS);
+                handler = "4xx";
                 break;
             default:
-                timer5xx.update(time, TimeUnit.MILLISECONDS);
+                handler = "5xx";
                 break;
         }
 
+        statsd.increment(String.format("requests.%s.count", handler));
+        statsd.recordExecutionTime(String.format("requests.%s.times", handler), time);
         nextListener.proceed();
     }
 
-    public static MetricsHandler create(HttpHandler next) {
-        MetricRegistry registry = SharedMetricRegistries.getOrCreate("divolte");
-        return new MetricsHandler(next, registry);
+    public static MetricsHandler create(HttpHandler next, StatsdConfiguration configuration) {
+        StatsDClient client;
+
+        if (configuration.enabled) {
+            client = new NonBlockingStatsDClient(
+                configuration.prefix,
+                configuration.host,
+                configuration.port,
+                null,
+                configuration.bufferSize);
+        } else {
+            client = new NoOpStatsDClient();
+        }
+
+        return new MetricsHandler(next, client);
     }
 }

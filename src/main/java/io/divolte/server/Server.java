@@ -141,7 +141,8 @@ public final class Server implements Runnable {
         HttpHandler handler = MetricsHandler.create(
             vc.configuration().global.server.debugRequests
                 ? new RequestDumpingHandler(rootHandler)
-                : rootHandler);
+                : rootHandler,
+            vc.configuration().global.statsd);
         undertow = Undertow.builder()
                            .addHttpListener(port, host.orElse(null))
                            .setHandler(handler)

@@ -32,6 +32,7 @@ public class GlobalConfiguration {
     @Valid public final KafkaConfiguration kafka;
     @Valid public final GoogleCloudStorageConfiguration gcs;
     @Valid public final GoogleCloudPubSubConfiguration gcps;
+    @Valid public final StatsdConfiguration statsd;
 
     @JsonCreator
     GlobalConfiguration(final ServerConfiguration server,
@@ -39,13 +40,15 @@ public class GlobalConfiguration {
                         final HdfsConfiguration hdfs,
                         final KafkaConfiguration kafka,
                         final GoogleCloudStorageConfiguration gcs,
-                        final GoogleCloudPubSubConfiguration gcps) {
+                        final GoogleCloudPubSubConfiguration gcps,
+                        final StatsdConfiguration statsd) {
         this.server = Objects.requireNonNull(server);
         this.mapper = Objects.requireNonNull(mapper);
         this.hdfs = Objects.requireNonNull(hdfs);
         this.kafka = Objects.requireNonNull(kafka);
         this.gcs = Objects.requireNonNull(gcs);
         this.gcps = Objects.requireNonNull(gcps);
+        this.statsd = Objects.requireNonNull(statsd);
     }
 
     @Override
@@ -57,6 +60,7 @@ public class GlobalConfiguration {
                 .add("gcs", gcs)
                 .add("kafka", kafka)
                 .add("gcps", gcps)
+                .add("statsd", statsd)
                 .toString();
     }
 }

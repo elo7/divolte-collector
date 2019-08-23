@@ -1,22 +1,20 @@
 package io.divolte.server;
 
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
+import com.timgroup.statsd.StatsDClient;
 import io.undertow.server.ExchangeCompletionListener;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import java.util.concurrent.TimeUnit;
-
-import static com.codahale.metrics.MetricRegistry.name;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Mockito.*;
@@ -28,30 +26,20 @@ public class MetricsHandlerTest {
     @Mock
     private HttpHandler handler;
     @Mock
-    private MetricRegistry registry;
-    private HttpServerExchange exchange = PowerMockito.mock(HttpServerExchange.class);
+    private StatsDClient statsd;
     @Mock
     private ExchangeCompletionListener.NextListener nextListener;
-    @Mock
-    private Timer timer2xx;
-    @Mock
-    private Timer timer3xx;
-    @Mock
-    private Timer timer4xx;
-    @Mock
-    private Timer timer5xx;
+    @Captor
+    private ArgumentCaptor<String> captor;
 
+    private HttpServerExchange exchange = PowerMockito.mock(HttpServerExchange.class);
     private MetricsHandler subject;
 
     @Before
     public void setup() {
-        when(registry.timer(name(MetricsHandler.class, "requests.time.2xx"))).thenReturn(timer2xx);
-        when(registry.timer(name(MetricsHandler.class, "requests.time.3xx"))).thenReturn(timer3xx);
-        when(registry.timer(name(MetricsHandler.class, "requests.time.4xx"))).thenReturn(timer4xx);
-        when(registry.timer(name(MetricsHandler.class, "requests.time.5xx"))).thenReturn(timer5xx);
         when(exchange.getStatusCode()).thenReturn(200);
 
-        subject = new MetricsHandler(handler, registry);
+        subject = new MetricsHandler(handler, statsd);
     }
 
     @Test
@@ -117,10 +105,12 @@ public class MetricsHandlerTest {
 
         subject.exchangeEvent(exchange, nextListener, 0L);
 
-        verify(timer2xx).update(anyLong(), any(TimeUnit.class));
-        verify(timer3xx, never()).update(Mockito.anyLong(), any(TimeUnit.class));
-        verify(timer4xx, never()).update(anyLong(), any(TimeUnit.class));
-        verify(timer5xx, never()).update(anyLong(), any(TimeUnit.class));
+        verify(statsd).increment("requests.2xx.count");
+        verify(statsd).recordExecutionTime(captor.capture(), anyLong());
+        verify(statsd, never()).increment("requests.3xx.count");
+        verify(statsd, never()).increment("requests.4xx.count");
+        verify(statsd, never()).increment("requests.5xx.count");
+        Assert.assertEquals("requests.2xx.times", captor.getValue());
     }
 
     @Test
@@ -129,10 +119,12 @@ public class MetricsHandlerTest {
 
         subject.exchangeEvent(exchange, nextListener, 0L);
 
-        verify(timer2xx, never()).update(anyLong(), any(TimeUnit.class));
-        verify(timer3xx).update(anyLong(), any(TimeUnit.class));
-        verify(timer4xx, never()).update(anyLong(), any(TimeUnit.class));
-        verify(timer5xx, never()).update(anyLong(), any(TimeUnit.class));
+        verify(statsd, never()).increment("requests.2xx.count");
+        verify(statsd).recordExecutionTime(captor.capture(), anyLong());
+        verify(statsd).increment("requests.3xx.count");
+        verify(statsd, never()).increment("requests.4xx.count");
+        verify(statsd, never()).increment("requests.5xx.count");
+        Assert.assertEquals("requests.3xx.times", captor.getValue());
     }
 
     @Test
@@ -141,10 +133,12 @@ public class MetricsHandlerTest {
 
         subject.exchangeEvent(exchange, nextListener, 0L);
 
-        verify(timer2xx, never()).update(anyLong(), any(TimeUnit.class));
-        verify(timer3xx, never()).update(anyLong(), any(TimeUnit.class));
-        verify(timer4xx).update(anyLong(), any(TimeUnit.class));
-        verify(timer5xx, never()).update(anyLong(), any(TimeUnit.class));
+        verify(statsd, never()).increment("requests.2xx.count");
+        verify(statsd).recordExecutionTime(captor.capture(), anyLong());
+        verify(statsd, never()).increment("requests.3xx.count");
+        verify(statsd).increment("requests.4xx.count");
+        verify(statsd, never()).increment("requests.5xx.count");
+        Assert.assertEquals("requests.4xx.times", captor.getValue());
     }
 
     @Test
@@ -153,9 +147,11 @@ public class MetricsHandlerTest {
 
         subject.exchangeEvent(exchange, nextListener, 0L);
 
-        verify(timer2xx, never()).update(anyLong(), any(TimeUnit.class));
-        verify(timer3xx, never()).update(anyLong(), any(TimeUnit.class));
-        verify(timer4xx, never()).update(anyLong(), any(TimeUnit.class));
-        verify(timer5xx).update(anyLong(), any(TimeUnit.class));
+        verify(statsd, never()).increment("requests.2xx.count");
+        verify(statsd).recordExecutionTime(captor.capture(), anyLong());
+        verify(statsd, never()).increment("requests.3xx.count");
+        verify(statsd, never()).increment("requests.4xx.count");
+        verify(statsd).increment("requests.5xx.count");
+        Assert.assertEquals("requests.5xx.times", captor.getValue());
     }
 }
